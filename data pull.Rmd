@@ -1,0 +1,33 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(tidycensus)
+```
+
+
+```{r}
+vars_19 = load_variables(2019, "acs5", cache = TRUE)
+
+vars_19
+```
+
+
+```{r}
+oakland_data = map_dfr(list(vars_19$name), function(.x) {get_acs(
+  geography = "block group",
+  variables =  .x, 
+  # output = "wide",
+  state = "MI", 
+  county = "Oakland", 
+  year = 2019)})
+
+oakland_data %>% dim()
+
+oakland_data %>% write_rds(file.path("oakland_data.rds"))
+```
+
+
