@@ -1,0 +1,91 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(h2o)
+
+h2o.init(nthreads=-1) # multiprocessing support
+h2o.removeAll() # Clean slate - just in case the cluster was already running
+```
+
+
+```{r eval=FALSE}
+wayne_data_prepped = read_rds(file.path("wayne_data_prepped.rds"))
+```
+
+```{r}
+set.seed(1234)
+folds = wayne_data_prepped %>%
+  select(GEOID) %>%
+  distinct() %>%
+  group_by(GEOID) %>%
+  mutate(fold = sample.int(6, GEOID %>% length(), replace = TRUE))
+
+folds %>% write_csv(file.path("folds.csv"))
+
+folds %>% janitor::tabyl(fold)
+```
+
+# No computer model
+
+```{r}
+response = "outcome_no_computer"
+predictors = setdiff(names(wayne_data_prepped), c(response, "GEOID", "Location", "outcome_no_internet", computer_outcomes, internet_outcomes))
+predictors %>% length()
+```
+
+```{r}
+gbm_pc_model <- h2o.gbm(x = predictors,
+               y = response,
+               training_frame = wayne_data_prepped %>% inner_join(folds %>% filter(fold %in% 1:5)) %>% as.h2o(),
+               # nfolds = 5,
+               fold_column = "fold",
+               # validation_frame = tune_enc %>% as.h2o(),
+               ntrees = 2000,
+               # learn_rate = 0.05,
+               learn_rate = 0.01,
+               # learn_rate_annealing = 0.99,
+               score_tree_interval = 10,
+               stopping_rounds = 5,
+               stopping_tolerance = 1e-5,
+               stopping_metric = "AUC",
+               seed = 1234,
+               keep_cross_validation_predictions = TRUE)
+
+h2o.saveModel(gbm_pc_model, path = ".")
+```
+
+
+# No internet model
+
+output: number of predictors
+
+```{r}
+response = "outcome_no_internet"
+predictors = setdiff(names(wayne_data_prepped), c(response, "GEOID", "Location", "outcome_no_computer", computer_outcomes, internet_outcomes))
+predictors %>% length()
+```
+
+```{r}
+gbm_net_model <- h2o.gbm(x = predictors,
+               y = response,
+               training_frame = wayne_data_prepped %>% inner_join(folds %>% filter(fold %in% 1:5)) %>% as.h2o(),
+               # nfolds = 5,
+               fold_column = "fold",
+               # validation_frame = tune_enc %>% as.h2o(),
+               ntrees = 2000,
+               # learn_rate = 0.05,
+               learn_rate = 0.01,
+               # learn_rate_annealing = 0.99,
+               score_tree_interval = 10,
+               stopping_rounds = 5,
+               stopping_tolerance = 1e-5,
+               stopping_metric = "AUC",
+               seed = 1234,
+               keep_cross_validation_predictions = TRUE)
+
+h2o.saveModel(gbm_net_model, path = ".")
+```

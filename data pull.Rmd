@@ -12,22 +12,35 @@ library(tidycensus)
 ```{r}
 vars_19 = load_variables(2019, "acs5", cache = TRUE)
 
-vars_19
+vars_19_cleaned = vars_19 %>%
+  mutate(label = snakecase::to_snake_case(label),
+         concept = snakecase::to_snake_case(label))
+
+vars_19_cleaned %>% write_rds(file.path("variables.rds"))
+vars_19_cleaned %>% write_csv(file.path("variables.csv"))
 ```
 
 
 ```{r}
-oakland_data = map_dfr(list(vars_19$name), function(.x) {get_acs(
+wayne_data = map_dfr(list(vars_19$name), function(.x) {get_acs(
   geography = "block group",
-  variables =  .x, 
-  # output = "wide",
-  state = "MI", 
-  county = "Oakland", 
-  year = 2019)})
+  variables =  .x,
+  output = "tidy",
+  state = "MI",
+  county = "Wayne",
+  year = 2019,
+  geometry = FALSE,
+  keep_geo_vars = FALSE)})
 
-oakland_data %>% dim()
-
-oakland_data %>% write_rds(file.path("oakland_data.rds"))
+wayne_data %>% dim()
 ```
 
+```{r}
+wayne_data_w_labels = wayne_data %>%
+  rename(Location = NAME) %>% 
+  left_join(vars_19_cleaned, by = c("variable" = "name"))
+
+wayne_data_w_labels %>% write_rds(file.path("wayne_data.rds"))
+wayne_data_w_labels %>% write_csv(file.path("wayne_data.csv"))
+```
 

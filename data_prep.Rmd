@@ -1,0 +1,57 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+
+wayne_data_w_labels = read_rds("wayne_data.rds")
+```
+
+# Pivot wider
+
+```{r}
+wayne_data_wide = wayne_data_w_labels %>% 
+  distinct(across(c(GEOID, Location, label)), .keep_all = TRUE) %>% 
+  pivot_wider(id_cols = c("GEOID", "Location"), names_from = "label", values_from = "estimate")
+
+wayne_data_wide %>% 
+  write_rds(file.path("wayne_data_wide.rds"))
+
+wayne_data_wide %>% 
+  write_csv(file.path("wayne_data_wide.csv"))
+```
+
+# capture outcome labels
+
+```{r}
+computer_outcomes = wayne_data_wide %>% 
+  select(ends_with("no_computer"), 
+         contains("has_a_computer")) %>% 
+  names()
+
+internet_outcomes = wayne_data_wide %>% 
+  select(contains("no_internet_access"), 
+         contains("without_an_internet_subscription")) %>% 
+  names()
+```
+
+# Build outcomes
+
+Build binary outcome for block groups one SD above the median for both no internet and no computer variables
+
+```{r}
+wayne_data_prepped = wayne_data_wide %>% 
+  mutate(pct_no_computer = (estimate_total_no_computer / estimate_total) %>% round(2)) %>% 
+  mutate(outcome_no_computer = if_else(pct_no_computer > (median(pct_no_computer, na.rm = TRUE) + sd(pct_no_computer, na.rm = TRUE)), 1, 0, 0) %>% as.factor()) %>% 
+  mutate(pct_no_internet = (estimate_total_no_internet_access / estimate_total) %>% round(2)) %>% 
+  mutate(outcome_no_internet = if_else(pct_no_internet > (median(pct_no_internet, na.rm = TRUE) + sd(pct_no_internet, na.rm = TRUE)), 1, 0, 0) %>% as.factor()) %>% 
+  select(-c(pct_no_computer, pct_no_internet))
+
+wayne_data_prepped %>% dim()
+
+wayne_data_prepped %>% write_rds(file.path("wayne_data_prepped.rds"))
+```
+
+
