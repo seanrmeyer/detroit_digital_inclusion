@@ -12,14 +12,13 @@ h2o.init(nthreads=-1) # multiprocessing support
 
 ```{r eval=FALSE}
 wayne_data_prepped = read_rds(file.path("wayne_data_prepped.rds"))
-gbm_pc_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_11023"))
-gbm_net_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_11970"))
+gbm_pc_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_14307"))
+gbm_net_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_15277"))
 folds = read_csv(file.path("folds.csv"))
 ```
 
 ```{r}
-
-test_data = wayne_data_prepped %>% left_join(folds %>% filter(fold == 6))
+test_data = wayne_data_prepped %>% left_join(folds %>% mutate(GEOID = GEOID %>% as.character()) %>% filter(fold == 6))
 ```
 
 # Test data predictions
@@ -116,30 +115,25 @@ ggsave(file = "roc_plot_pred.png", width = 10, height = 10, units = 'in', dpi = 
 
 ```{r}
 gbm_imp_pc = h2o.varimp(gbm_pc_model) %>%
-  arrange(desc(percentage)) %>% 
+  arrange(relative_importance) %>% 
   rename(pc_relative_importance = relative_importance, pc_scaled_importance = scaled_importance, pc_percentage = percentage)
 
 gbm_imp_pc %>%
   as.data.frame() %>%
   head(20) %>%
-  mutate(percentage = percentage %>% round(2)) %>%
-  select(variable, percentage) %>%
-  arrange(desc(percentage)) %>%
-  ggplot(aes(x = reorder(variable, percentage), y = percentage)) +
+  mutate(pc_relative_importance = pc_relative_importance %>% round(2)) %>%
+  select(variable, pc_relative_importance) %>%
+  arrange(desc(pc_relative_importance)) %>%
+  ggplot(aes(x = reorder(variable, pc_relative_importance), y = pc_relative_importance)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   xlab("")
-
 ```
 
 ```{r}
 gbm_imp_net = h2o.varimp(gbm_net_model) %>%
   arrange(desc(percentage)) %>% 
   rename(net_relative_importance = relative_importance, net_scaled_importance = scaled_importance, net_percentage = percentage)
-
-
-
-
 ```
 
 ```{r}
@@ -168,6 +162,25 @@ gbm_imp_all %>%
   as.data.frame() %>%
   write_csv(file.path("gbm_importance.csv"), append = FALSE)
 ```
+
+```{r}
+wayne_data_prepped %>%
+  select(gbm_imp_net %>% slice(1:10) %>% pull(variable)) %>% 
+  rename_all(.,~ stringr::str_sub(., 10L, 60L)) %>% 
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         order = "hclust", diag = FALSE)
+``` 
+```{r}
+wayne_data_prepped %>%
+  select(gbm_imp_pc %>% slice(1:10) %>% pull(variable)) %>% 
+  rename_all(.,~ stringr::str_sub(., 10L, 60L)) %>% 
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         order = "hclust", diag = FALSE)
+``` 
 
 
 ```{r eval=FALSE, include=FALSE}

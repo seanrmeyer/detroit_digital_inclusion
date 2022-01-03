@@ -33,6 +33,8 @@ computer_outcomes = wayne_data_wide %>%
 
 internet_outcomes = wayne_data_wide %>% 
   select(contains("no_internet_access"), 
+         contains("with_an_internet_subscription"),
+         contains("with_a_broadband_internet_subscription"),
          contains("without_an_internet_subscription")) %>% 
   names()
 ```
