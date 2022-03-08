@@ -10,14 +10,22 @@ library(runway)
 h2o.init(nthreads=-1) # multiprocessing support
 ```
 
+PC MODEL
+model	GBM_model_R_1643640690953_1
+frame	data.frame_sid_bda3_1
+
+Net model
+model	GBM_model_R_1643640690953_474
+frame	data.frame_sid_bda3_5
+
 ```{r eval=FALSE}
 wayne_data_prepped = read_rds(file.path("wayne_data_prepped.rds"))
-gbm_pc_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_14307"))
-gbm_net_model = h2o.loadModel(file.path("GBM_model_R_1640656019954_15277"))
-folds = read_csv(file.path("folds.csv"))
+gbm_pc_model = h2o.loadModel(file.path("GBM_model_R_1644348908722_1"))
+gbm_net_model = h2o.loadModel(file.path("GBM_model_R_1644348908722_251"))
 ```
 
 ```{r}
+folds = read_csv(file.path("folds.csv"))
 test_data = wayne_data_prepped %>% left_join(folds %>% mutate(GEOID = GEOID %>% as.character()) %>% filter(fold == 6))
 ```
 
@@ -69,6 +77,7 @@ runway::cal_plot_multi(all_predictions,
 ggsave(file = "calibration_plot.png", width = 10, height = 10, units = 'in', dpi = 300, scale = 1)
 ```
 
+
 # Threshold performance
 
 ```{r}
@@ -115,7 +124,7 @@ ggsave(file = "roc_plot_pred.png", width = 10, height = 10, units = 'in', dpi = 
 
 ```{r}
 gbm_imp_pc = h2o.varimp(gbm_pc_model) %>%
-  arrange(relative_importance) %>% 
+  arrange(desc(relative_importance)) %>% 
   rename(pc_relative_importance = relative_importance, pc_scaled_importance = scaled_importance, pc_percentage = percentage)
 
 gbm_imp_pc %>%
@@ -143,15 +152,17 @@ gbm_imp_all = bind_cols(vars %>% left_join(gbm_imp_net %>% as.data.frame(), by =
                         vars %>% left_join(gbm_imp_pc %>% as.data.frame(), by = c("label" = "variable")) %>% select(-c(name, label, concept))) %>% 
   filter(!is.na(net_relative_importance) & !is.na(pc_relative_importance)) %>% 
   mutate(across(4:9, round, 1)) %>% 
-  arrange(desc(net_scaled_importance))
+  arrange(desc(net_scaled_importance)) %>% 
+  mutate(combined_importance = net_scaled_importance * pc_scaled_importance) %>% 
+  distinct(across(c(label, combined_importance)))
 
-gbm_imp_net %>%
+gbm_imp_all %>%
   as.data.frame() %>%
   head(20) %>%
-  mutate(net_scaled_importance = net_scaled_importance %>% round(2)) %>%
-  select(variable, net_scaled_importance) %>%
-  arrange(desc(net_scaled_importance)) %>%
-  ggplot(aes(x = reorder(variable, net_scaled_importance), y = net_scaled_importance)) +
+  mutate(combined_importance = combined_importance %>% round(2)) %>%
+  select(label, combined_importance) %>%
+  arrange(desc(combined_importance)) %>%
+  ggplot(aes(x = reorder(label, combined_importance), y = combined_importance)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   xlab("")
@@ -165,8 +176,9 @@ gbm_imp_all %>%
 
 ```{r}
 wayne_data_prepped %>%
-  select(gbm_imp_net %>% slice(1:10) %>% pull(variable)) %>% 
-  rename_all(.,~ stringr::str_sub(., 10L, 60L)) %>% 
+  select("estimate_total_no_computer", "estimate_total_no_internet_access", gbm_imp_net %>% slice(1:10) %>% pull(variable)) %>% 
+  # rename_at(vars(contains("estimate_total_no_computer")), ~ stringr::str_sub(., 15L, 80L)) %>% 
+  rename_all(.,~ stringr::str_sub(., 10L, 60L)) %>%
   stats::cor(use = "pairwise.complete.obs") %>% 
   corrplot::corrplot(type = "upper", tl.pos = "td",
          method = "circle", tl.cex = 0.8, tl.col = 'black',
@@ -174,14 +186,94 @@ wayne_data_prepped %>%
 ``` 
 ```{r}
 wayne_data_prepped %>%
-  select(gbm_imp_pc %>% slice(1:10) %>% pull(variable)) %>% 
-  rename_all(.,~ stringr::str_sub(., 10L, 60L)) %>% 
+  select("estimate_total_no_computer", "estimate_total_no_internet_access", gbm_imp_pc %>% slice(1:10) %>% pull(variable)) %>% 
+  # rename_at(vars(contains("estimate_total_no_computer")), ~ stringr::str_sub(., 15L, 80L)) %>% 
+  rename_all(.,~ stringr::str_sub(., 10L, 90L)) %>%
   stats::cor(use = "pairwise.complete.obs") %>% 
   corrplot::corrplot(type = "upper", tl.pos = "td",
          method = "circle", tl.cex = 0.8, tl.col = 'black',
          order = "hclust", diag = FALSE)
 ``` 
 
+Correlation between age, income, race, and outcomes
+
+```{r}
+wayne_data_prepped %>% 
+  select(contains("estimate_median_household_income_in_the_past_12_months")) %>% 
+    select_if(function(x) !(all(is.na(x)) | all(x==""))) %>% 
+  names()
+
+wayne_data_prepped %>% 
+  select("estimate_total_no_computer", "estimate_total_no_internet_access", "estimate_median_age_total", "estimate_median_age_male", "estimate_median_age_female", contains("estimate_total_population_of_one_race"), "estimate_median_household_income_in_the_past_12_months_in_2019_inflation_adjusted_dollars") %>% 
+  rename_all(.,~ stringr::str_sub(., 10L, 50L)) %>%
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         # order = "hclust", 
+         diag = FALSE)
+```
+
+```{r}
+wayne_data_prepped %>% 
+  select("estimate_total_no_computer", "estimate_total_no_internet_access", contains("estimate_total_population_of_one_race")) %>% 
+  rename_at(vars(contains("estimate_total_population_of_one_race")), ~ stringr::str_sub(., 34L, 80L)) %>% 
+  select(-race) %>% 
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         # order = "hclust", 
+         diag = FALSE)
+```
+
+
+
+```{r}
+wayne_data_prepped %>% 
+  select(contains("disability")) %>% 
+  names()
+
+# capture all columns that aren't all NA
+wayne_data_prepped %>% 
+  select(contains("disability")) %>%
+  select_if(function(x) !(all(is.na(x)) | all(x==""))) %>% 
+  names()
+```
+
+
+```{r}
+wayne_data_prepped %>% 
+  select("estimate_total_no_computer", "estimate_total_no_internet_access", contains("disability")) %>% 
+  rename_at(vars(contains("estimate_median_household_income_total")), ~ stringr::str_sub(., 34L, 80L)) %>%
+  # select(-race) %>% 
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         # order = "hclust", 
+         diag = FALSE)
+```
+
+```{r}
+wayne_data_prepped %>%
+  select(gbm_imp_pc %>% slice(1:10) %>% pull(variable)) %>% 
+  # rename_all(.,~ stringr::str_sub(., 5L, 60L)) %>% 
+  stats::cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.8, tl.col = 'black',
+         order = "hclust", diag = FALSE)
+``` 
+
+```{r}
+gbm_net_model_predictions_w_labels = gbm_net_model_predictions %>% 
+  select(GEOID, prediction = p1, )
+  inner_join(wayne_data_w_labels %>% 
+               filter(label %in% c("estimate_total", "estimate_total_no_computer", "estimate_total_no_internet_access"))) %>% 
+  arrange(desc(p1))
+
+gbm_net_model_predictions_w_labels %>% na.omit()
+
+gbm_net_model_predictions_w_labels %>% 
+  write_csv("gbm_net_model_predictions.csv")
+```
 
 ```{r eval=FALSE, include=FALSE}
 h2o.shutdown(prompt=FALSE)

@@ -7,28 +7,51 @@ output: html_notebook
 library(tidyverse)
 
 wayne_data_w_labels = read_rds("wayne_data.rds")
+
+wayne_data_w_labels %>% head()
+
+wayne_data_w_labels %>% dim()
+
+wayne_data_w_labels %>% select(label) %>% unique() %>% nrow()
 ```
+```{r}
+library(jsonlite)
+det_geoids = fromJSON("DetroitBlockGroupsPlusGeo.geojson", flatten=TRUE)
+```
+
 
 # Pivot wider
 
 ```{r}
 wayne_data_wide = wayne_data_w_labels %>% 
+  semi_join(det_geoids$features %>% select(GEOID = properties.GEOID10)) %>% 
   distinct(across(c(GEOID, Location, label)), .keep_all = TRUE) %>% 
-  pivot_wider(id_cols = c("GEOID", "Location"), names_from = "label", values_from = "estimate")
+  pivot_wider(id_cols = c("GEOID", "Location"), names_from = c("variable", "label"), values_from = "estimate") %>% 
+  select_if(function(x) !(all(is.na(x)) | all(x=="")))
 
 wayne_data_wide %>% 
   write_rds(file.path("wayne_data_wide.rds"))
 
 wayne_data_wide %>% 
   write_csv(file.path("wayne_data_wide.csv"))
+
+wayne_data_wide %>% dim()
 ```
 
 # capture outcome labels
 
 ```{r}
+wayne_data_wide %>% 
+  select(contains("high_school")) #%>% 
+  # names()
+```
+
+
+```{r}
 computer_outcomes = wayne_data_wide %>% 
   select(ends_with("no_computer"), 
-         contains("has_a_computer")) %>% 
+         contains("has_a_computer"), 
+         contains("has_one_or_more_types_of_computing_devices")) %>% 
   names()
 
 internet_outcomes = wayne_data_wide %>% 

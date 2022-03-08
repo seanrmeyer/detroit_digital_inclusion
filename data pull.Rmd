@@ -29,8 +29,8 @@ wayne_data = map_dfr(list(vars_19$name), function(.x) {get_acs(
   state = "MI",
   county = "Wayne",
   year = 2019,
-  geometry = FALSE,
-  keep_geo_vars = FALSE)})
+  geometry = TRUE,
+  keep_geo_vars = TRUE)})
 
 wayne_data %>% dim()
 ```
@@ -43,4 +43,25 @@ wayne_data_w_labels = wayne_data %>%
 wayne_data_w_labels %>% write_rds(file.path("wayne_data.rds"))
 wayne_data_w_labels %>% write_csv(file.path("wayne_data.csv"))
 ```
+
+# save shape data
+
+```{r}
+wayne_shape_data = get_acs(
+  geography = "block group",
+  variables =  "B01001_001",
+  output = "tidy",
+  state = "MI",
+  county = "Wayne",
+  year = 2019,
+  geometry = TRUE,
+  keep_geo_vars = TRUE)
+wayne_shape_data %>% str()
+
+wayne_shape_data %>% write_rds(file.path("wayne_shape_data.rds"))
+wayne_shape_data %>% write_csv(file.path("wayne_shape_data.csv"))
+```
+
+
+
 

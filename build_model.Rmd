@@ -70,6 +70,23 @@ predictors %>% length()
 ```
 
 ```{r}
+lasso_net_model <- h2o.glm(family= "binomial", 
+  alpha = 1,
+  seed = 1234, 
+  x = predictors,
+  y = response,
+  training_frame = wayne_data_prepped %>% inner_join(folds %>% filter(fold %in% 1:5)) %>% as.h2o(),
+  nfolds = 10)
+
+lasso_net_model %>% 
+  # h2o.performance() %>% 
+  h2o.auc(xval = TRUE) %>% 
+  round(3)
+
+h2o.saveModel(lasso_net_model, path = ".")
+```
+
+```{r}
 gbm_net_model <- h2o.gbm(x = predictors,
                y = response,
                training_frame = wayne_data_prepped %>% inner_join(folds %>% filter(fold %in% 1:5)) %>% as.h2o(),
